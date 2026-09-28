@@ -37,6 +37,17 @@ resource "aws_ssm_parameter" "spotify_client_secret" {
   }
 }
 
+# This resource creates an SSM parameter in AWS for storing the Spotify refresh token securely.
+resource "aws_ssm_parameter" "spotify_refresh_token"{
+  name = "/${var.project_name}/spotify/refresh_token"
+  type = "SecureString"
+  value = "placeholder"
+
+  lifecycle {
+    ignore_changes =[value]
+  }
+}
+
 
 # WHO can wear the badge (trust policy)
 data aws_iam_policy_document "lambda_trust" { 

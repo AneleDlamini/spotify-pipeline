@@ -99,3 +99,32 @@ resource "aws_iam_role_policy_attachment" "lambda_logs" {
   role       = aws_iam_role.lambda.name # The IAM role created above is associated with this policy attachment.
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" # allows Lambda to write logs to CloudWatch
 }
+
+# This resource creates an ECR repository in AWS for storing Docker images used by the Lambda function.
+resource "aws_ecr_repository" "ingest" {
+  name = "${var.project_name}-ingest"
+  image_tag_mutability = "MUTABLE" # allows image tags to be overwritten
+
+  image_scanning_configuration {
+    scan_on_push = true # enables image scanning on push
+  }
+}
+
+# This resource creates an ECR lifecycle policy in AWS that defines rules for managing the images in the ECR repository created above.
+resource "aws_ecr_lifecycle_policy" "ingest" {
+  repository = aws_ecr_repository.ingest.name 
+
+  policy = jsonencode({
+  rules = [{
+      rulePriority = 1 # The priority of the rule. Lower numbers indicate higher priority.
+      description  = "Keep only the 5 most recent images" # This rule keeps only the 5 most recent images in the ECR repository and expires older images.
+      selection    = {
+        tagStatus    = "tagged"
+        tagPatternList = ["*"] # This rule applies to all tagged images in the ECR repository.
+        countType    = "imageCountMoreThanN"
+        countNumber  = 5
+      }
+      action = {type = "expire"} # This action expires images that match the selection criteria.
+    }]
+  })
+}

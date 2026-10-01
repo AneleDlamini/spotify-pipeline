@@ -10,6 +10,13 @@ terraform {
       version = "~> 6.0"
     }
   }
+
+  backend "s3" {
+    key            = "spotify-pipeline/terraform.tfstate"        # The key (path) within the S3 bucket where the Terraform state file will be stored.
+    region         = "us-east-1"          # The AWS region where the S3 bucket is located, specified by the variable aws_region.
+    encrypt        = true                     # Enable server-side encryption for the state file in S3.
+    use_lockfile   = true
+  }
 }
 
 provider "aws" {
@@ -22,3 +29,4 @@ provider "aws" {
     }
   }
 }
+

@@ -121,7 +121,7 @@ resource "aws_ecr_lifecycle_policy" "ingest" {
       selection    = {
         tagStatus    = "tagged"
         tagPatternList = ["*"] # This rule applies to all tagged images in the ECR repository.
-        countType    = "imageCountMoreThanN"
+        countType    = "imageCountMoreThan"
         countNumber  = 5
       }
       action = {type = "expire"} # This action expires images that match the selection criteria.

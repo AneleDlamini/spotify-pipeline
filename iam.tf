@@ -50,12 +50,17 @@ data "aws_iam_policy_document" "lambda_permissions" {
   }
 }
 
-# Permissions for the transform Lambda functions.
+# Permissions for the transform Lambda functions - read the raw data from S3 and write the transformed data back to S3.
 data "aws_iam_policy_document" "lambda_transform_permissions" {
   statement {
     sid       = "ReadRawData"
     actions   = ["s3:GetObject"]
-    resources = ["${aws_s3_bucket.raw_data.arn}/*"]
+    resources = ["${aws_s3_bucket.raw_data.arn}/recently_played/*"]
+  }
+  statement {
+    sid       = "WriteTransformedData"
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.raw_data.arn}/processed/*"]
   }
 }
 

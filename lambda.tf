@@ -39,7 +39,7 @@ resource "aws_lambda_function" "ingest" {
   function_name = "${var.project_name}-ingest"
   role          = aws_iam_role.lambda.arn
   package_type  = "Image"
-  image_uri     = "${aws_ecr_repository.ingest.repository_url}:v1"
+  image_uri     = "${aws_ecr_repository.ingest.repository_url}:${var.image_tag}"
   timeout       = 60
   memory_size   = 256
 
@@ -56,7 +56,7 @@ resource "aws_lambda_function" "transform" {
   function_name = "${var.project_name}-transform"
   role          = aws_iam_role.lambda-transform.arn
   package_type  = "Image"
-  image_uri     = "${aws_ecr_repository.ingest.repository_url}:v2"
+  image_uri     = "${aws_ecr_repository.ingest.repository_url}:${var.image_tag}"
   timeout       = 60
   memory_size   = 256
 

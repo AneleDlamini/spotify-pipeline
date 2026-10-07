@@ -11,3 +11,8 @@ variable "project_name" {
   default     = "spotify-pipeline"
   type        = string
 }
+
+variable "image_tag" {
+  description = "The tag for the Docker image to be used for the Lambda function."
+  default     = "v1"
+}

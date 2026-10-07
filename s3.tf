@@ -17,6 +17,7 @@ resource "aws_s3_bucket_public_access_block" "raw_data" {
 }
 
 
+# This resource sets up a notification on the raw data S3 bucket to trigger the transform Lambda function whenever a new object is uploaded.
 resource "aws_s3_bucket_notification" "raw_data" {
   bucket = aws_s3_bucket.raw_data.id
 
@@ -28,4 +29,10 @@ resource "aws_s3_bucket_notification" "raw_data" {
   }
 
   depends_on = [aws_lambda_permission.s3]
+}
+
+# This resource creates an S3 bucket for storing Athena query results.
+resource "aws_s3_bucket" "athena_results" {
+  bucket_prefix = "${var.project_name}-athena-results-"
+  force_destroy = true
 }

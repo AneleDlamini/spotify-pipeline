@@ -4,5 +4,6 @@ COPY requirements.txt ${LAMBDA_TASK_ROOT}
 RUN pip install -r requirements.txt
 
 COPY handler.py ${LAMBDA_TASK_ROOT}
+COPY transform.py ${LAMBDA_TASK_ROOT}
 
 CMD ["handler.handler"]

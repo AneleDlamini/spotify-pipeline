@@ -6,3 +6,4 @@
 .cache-*
 aws/
 awscliv2.zip
+docker run -it --rm \

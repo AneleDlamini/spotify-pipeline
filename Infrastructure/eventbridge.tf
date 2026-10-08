@@ -10,6 +10,12 @@ resource "aws_cloudwatch_event_rule" "ingest_schedule" {
 }
 
 # Grant permission for EventBridge to invoke the ingest Lambda function.
+resource "aws_cloudwatch_event_target" "ingest_schedule_target" {
+  rule      = aws_cloudwatch_event_rule.ingest_schedule.name
+  arn       = aws_lambda_function.ingest.arn
+}
+
+# Grant permission for EventBridge to invoke the ingest Lambda function.
 resource "aws_lambda_permission" "events" {
   statement_id  = "AllowExecutionFromEventBridge"
   action        = "lambda:InvokeFunction"

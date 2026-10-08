@@ -2,9 +2,9 @@
 
 An automated data pipeline that captures my Spotify listening history and stores it in AWS, built with Terraform.
 
-Every 6 hours, a scheduled Lambda fetches recently played tracks from the Spotify API and writes the raw JSON to S3. That write triggers a second Lambda, which flattens the nested JSON into a typed Parquet file ready for querying.
+Every 6 hours a scheduled Lambda fetches recently played tracks from the Spotify API and writes the raw JSON to S3. That write triggers a second Lambda, which flattens the nested JSON into a typed Parquet file. Athena queries the result with SQL.
 
-Built as a learning project for infrastructure as code, serverless architecture and AWS IAM.
+Built as a learning project for infrastructure as code, serverless architecture, event-driven design and AWS IAM.
 
 ---
 
@@ -27,9 +27,38 @@ EventBridge (every 6 hours)
         │
         ▼
    S3: processed/recently_played/dt=YYYY-MM-DD/*.parquet
+        │
+        ▼
+   Athena (Glue catalog table, partition projection)
 ```
 
-Both Lambdas run from the same container image held in ECR, with `image_config.command` selecting which handler runs. Each has its own IAM role scoped to only what it needs.
+Both Lambdas run from the same container image in ECR, with `image_config.command` selecting which handler runs. Each has its own IAM role scoped to only what it needs.
+
+---
+
+## Repository layout
+
+```
+.
+├── infra/                  # all Terraform — run commands from here
+│   ├── versions.tf         # Terraform and provider versions, S3 backend
+│   ├── variables.tf        # project name, region, image tag
+│   ├── s3.tf               # raw data bucket, Athena results bucket
+│   ├── ssm.tf              # encrypted Spotify credentials
+│   ├── iam.tf              # one role per Lambda
+│   ├── lambda.tf           # both functions, log groups, permissions
+│   ├── eventbridge.tf      # schedule rule and target
+│   ├── athena.tf           # Athena workgroup, Glue database and table
+│   └── outputs.tf
+├── Ingest/
+│   ├── Dockerfile          # AWS Lambda Python base image
+│   ├── handler.py          # ingest: Spotify API → raw JSON in S3
+│   ├── transform.py        # transform: raw JSON → Parquet
+│   └── requirements.txt
+├── athena/
+│   └── queries/            # analytical queries
+└── README.md
+```
 
 ---
 
@@ -38,35 +67,36 @@ Both Lambdas run from the same container image held in ECR, with `image_config.c
 | Resource | Purpose |
 | --- | --- |
 | S3 bucket | Raw JSON and processed Parquet, in separate prefixes |
-| SSM Parameter Store | Spotify client ID, client secret and refresh token, encrypted |
-| ECR repository | Holds the container image, keeping the 5 most recent |
+| S3 bucket (Athena) | Query results |
+| S3 bucket (state) | Terraform state — created outside Terraform, versioned |
+| SSM Parameter Store | Spotify client ID, secret and refresh token, encrypted |
+| ECR repository | Container image, keeping the 5 most recent |
 | Ingest Lambda | Fetches from Spotify, writes raw JSON |
 | Transform Lambda | Flattens JSON to Parquet on S3 event |
 | EventBridge rule | Triggers the ingest every 6 hours |
+| Glue catalog | Database and table definition for Athena |
 | IAM roles | One per function, least privilege |
 | CloudWatch log groups | 14-day retention |
-| S3 backend bucket | Terraform state, versioned, created outside Terraform |
 
 ---
 
-## Repository layout
+## Picking the project up again
 
+```bash
+aws login                 # browser sign-in with MFA, temporary credentials
+cd infra
+terraform init            # reconnects to the S3 backend
+terraform plan            # should report no changes
 ```
-.
-├── Ingest/
-│   ├── Dockerfile          # AWS Lambda Python base image
-│   ├── handler.py          # Ingest: Spotify API → raw JSON in S3
-│   ├── transform.py        # Transform: raw JSON → Parquet
-│   └── requirements.txt
-├── versions.tf             # Terraform and provider versions, S3 backend
-├── variables.tf            # Project name, region, image tag
-├── s3.tf                   # Raw data bucket and public access block
-├── ssm.tf                  # Encrypted Spotify credentials
-├── iam.tf                  # Roles and policies for both Lambdas
-├── lambda.tf               # Both functions, log groups, permissions
-├── eventbridge.tf          # Schedule rule and target
-└── outputs.tf
-```
+
+State lives in S3, so this works from any machine with AWS access. Nothing is stored locally that matters.
+
+**Where things live, for future reference**
+
+- Terraform state: the `zane-tfstate-*` S3 bucket, versioned
+- Container image: ECR repository `spotify-pipeline-ingest`, tagged `v1`, `v2`, …
+- Spotify credentials: SSM Parameter Store under `/spotify-pipeline/spotify/`
+- Spotify app registration: the Spotify developer dashboard, with redirect URI on port 9090
 
 ---
 
@@ -78,9 +108,9 @@ No long-lived AWS access keys exist anywhere in this project.
 
 **For the Lambdas:** each function assumes its own IAM role at runtime, and AWS supplies fresh credentials on every invocation.
 
-**For Spotify:** the client ID, client secret and refresh token live in SSM Parameter Store as encrypted `SecureString` parameters. Terraform creates each with a placeholder value and `ignore_changes` on `value`; the real values are set separately with `aws ssm put-parameter`. Nothing sensitive reaches the Terraform state file.
+**For Spotify:** the client ID, secret and refresh token live in SSM Parameter Store as encrypted `SecureString` parameters. Terraform creates each with a placeholder and `ignore_changes` on `value`; the real values are set separately with `aws ssm put-parameter`. Nothing sensitive reaches the Terraform state file.
 
-The refresh token comes from a one-time browser authorisation. Spotify's client-credentials flow only reaches public data, so reading personal listening history needs the authorisation-code flow, which produces a refresh token that does not expire.
+The refresh token came from a one-time browser authorisation. Spotify's client-credentials flow only reaches public data, so reading personal listening history needs the authorisation-code flow, which produces a refresh token that does not expire.
 
 Scopes granted: `user-read-recently-played`, `user-top-read`, `user-read-currently-playing`.
 
@@ -88,13 +118,11 @@ Scopes granted: `user-read-recently-played`, `user-top-read`, `user-read-current
 
 ## Deploying a change
 
-Terraform state lives in S3, so this works from any machine with AWS access.
-
 **1. Build and push a new image tag**
 
 ```bash
 cd Ingest
-ECR_URL="$(cd .. && terraform output -raw ecr_repository_url)"
+ECR_URL="$(cd ../infra && terraform output -raw ecr_repository_url)"
 
 DOCKER_BUILDKIT=0 docker build -t "$ECR_URL:v4" .
 
@@ -107,10 +135,11 @@ docker push "$ECR_URL:v4"
 **2. Point Terraform at the new tag**
 
 ```bash
+cd infra
 terraform apply -var="image_tag=v4"
 ```
 
-Or change the `image_tag` default in `variables.tf`.
+Or update the `image_tag` default in `variables.tf`.
 
 A new tag per deploy is deliberate. Overwriting an existing tag does not update a deployed function, because Lambda pins the image digest at deploy time.
 
@@ -126,23 +155,25 @@ aws s3 ls "s3://$(terraform output -raw raw_bucket_name)/processed/" --recursive
 
 ---
 
-## Checking it is running
+## Querying
 
-```bash
-# Recent ingest runs
-aws logs tail /aws/lambda/spotify-pipeline-ingest --since 12h
+The Glue table uses partition projection, so new dates are picked up automatically with no `MSCK REPAIR` step.
 
-# Transform errors
-aws logs tail /aws/lambda/spotify-pipeline-transform --since 12h
+Queries live in `athena/queries/` and can be run from the Athena console or the CLI. Example — most played artists:
 
-# Inspect a Parquet file using the container's own pandas
-docker run --rm -v /tmp:/data --entrypoint python "$ECR_URL:v4" \
-  -c "import pandas as pd; d=pd.read_parquet('/data/out.parquet'); print(d.dtypes); print(d.head())"
+```sql
+SELECT artist_names, COUNT(*) AS plays
+FROM (SELECT DISTINCT played_at, track_id, artist_names FROM recently_played)
+GROUP BY artist_names
+ORDER BY plays DESC
+LIMIT 10
 ```
 
----
+**Why the `SELECT DISTINCT` wrapper:** the ingest fetches the last 50 tracks every 6 hours, so the same play appears in several files. Without deduplicating on `played_at` and `track_id`, counts come out inflated.
 
-## Output schema
+**On timestamps:** `played_at` is stored in UTC. For local time, use `played_at AT TIME ZONE 'Africa/Johannesburg'`.
+
+### Output schema
 
 | Column | Type | Notes |
 | --- | --- | --- |
@@ -152,22 +183,65 @@ docker run --rm -v /tmp:/data --entrypoint python "$ECR_URL:v4" \
 | `artist_names` | string | Comma-separated where a track has several |
 | `album_name` | string | |
 | `album_release_date` | string | Precision varies by release |
-| `duration_sec` | float | |
+| `duration_sec` | double | |
+| `dt` | string | Partition key, `YYYY-MM-DD` |
 
 ---
 
-## Notes and constraints
+## Design decisions
 
-- The recently-played endpoint returns at most the last 50 tracks, which is why the schedule runs every 6 hours rather than daily.
-- The S3 event filter is scoped to `recently_played/` and `.json`. Without it, the transform's own output would retrigger the transform in an endless loop, since input and output share a bucket.
-- The Terraform backend block cannot use variables, so the state bucket name is hardcoded in `versions.tf`.
-- The state bucket is deliberately not managed by Terraform. `terraform destroy` would otherwise try to delete the bucket holding its own state.
+**Parquet over CSV.** Parquet stores types, so `played_at` arrives in Athena as a timestamp rather than a string and date comparisons work. It is also columnar, so a query reads only the columns it needs.
+
+**Transform before query, rather than querying raw JSON.** Athena can read the raw nested JSON, but the table definition needs nested structs and `UNNEST` to expand the items array. Flattening first turns that into a flat table with typed columns.
+
+**A role per function.** The transform needs no access to the Spotify credentials, so it holds no path to them. A shared role would have given it one for no reason.
+
+**The S3 event filter is load-bearing.** The transform writes to the same bucket that triggers it. The filter limits triggers to `recently_played/` and `.json` while output goes to `processed/`, which is what stops an endless loop.
+
+**Every 6 hours, not daily.** The recently-played endpoint returns at most the last 50 tracks, so a daily run could miss tracks on a heavy listening day.
+
+**Versioned image tags.** Explicit about which build is deployed, and rollback is a one-line change.
+
+**The state bucket is not managed by Terraform.** `terraform destroy` would otherwise try to delete the bucket holding its own state.
+
+---
+
+## Verifying it actually runs
+
+A scheduled job that deploys cleanly is not the same as a scheduled job that works. Checks worth running after any change:
+
+```bash
+# Did it run on its own? Look for runs you did not trigger
+aws logs tail /aws/lambda/spotify-pipeline-ingest --since 12h
+
+# Is the schedule attached to anything? An empty target list means it fires into nothing
+aws events list-targets-by-rule --rule spotify-pipeline-ingest
+
+# Did the transform error?
+aws logs tail /aws/lambda/spotify-pipeline-transform --since 12h
+```
+
+An EventBridge rule with no target fires on schedule and silently does nothing — no error, no log entry. The only symptom is the absence of output.
+
+---
+
+## Tearing it down
+
+```bash
+cd infra
+terraform destroy
+```
+
+Not covered by `destroy`, and needing manual removal:
+
+- The Terraform state bucket, deliberately unmanaged
+- The IAM group holding the Athena and Glue policies
+- The Spotify app in the developer dashboard
 
 ---
 
 ## Possible extensions
 
-- Query the Parquet files with Athena
 - Add `user-top-read` as a weekly snapshot of top artists
-- Partition the processed data for more efficient querying
-- Move the Terraform files into an `infra/` folder, separating infrastructure from application code
+- Replace the broad AWS-managed policies on the IAM user with one customer-managed policy
+- A dashboard over the Athena results

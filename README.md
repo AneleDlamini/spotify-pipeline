@@ -93,7 +93,7 @@ State lives in S3, so this works from any machine with AWS access. Nothing is st
 
 **Where things live, for future reference**
 
-- Terraform state: the `zane-tfstate-*` S3 bucket, versioned
+- Terraform state: the `anele-tfstate-*` S3 bucket, versioned
 - Container image: ECR repository `spotify-pipeline-ingest`, tagged `v1`, `v2`, …
 - Spotify credentials: SSM Parameter Store under `/spotify-pipeline/spotify/`
 - Spotify app registration: the Spotify developer dashboard, with redirect URI on port 9090

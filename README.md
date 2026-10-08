@@ -40,7 +40,7 @@ Both Lambdas run from the same container image in ECR, with `image_config.comman
 
 ```
 .
-├── infra/                  # all Terraform — run commands from here
+├── Infrastructure/                  # all Terraform — run commands from here
 │   ├── versions.tf         # Terraform and provider versions, S3 backend
 │   ├── variables.tf        # project name, region, image tag
 │   ├── s3.tf               # raw data bucket, Athena results bucket
@@ -55,7 +55,7 @@ Both Lambdas run from the same container image in ECR, with `image_config.comman
 │   ├── handler.py          # ingest: Spotify API → raw JSON in S3
 │   ├── transform.py        # transform: raw JSON → Parquet
 │   └── requirements.txt
-├── athena/
+├── Athena/
 │   └── queries/            # analytical queries
 └── README.md
 ```
@@ -84,7 +84,7 @@ Both Lambdas run from the same container image in ECR, with `image_config.comman
 
 ```bash
 aws login                 # browser sign-in with MFA, temporary credentials
-cd infra
+cd Infrastructure
 terraform init            # reconnects to the S3 backend
 terraform plan            # should report no changes
 ```
@@ -228,7 +228,7 @@ An EventBridge rule with no target fires on schedule and silently does nothing �
 ## Tearing it down
 
 ```bash
-cd infra
+cd Infrastructure
 terraform destroy
 ```
 

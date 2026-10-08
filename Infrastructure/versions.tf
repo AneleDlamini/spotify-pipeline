@@ -12,6 +12,7 @@ terraform {
   }
 
   backend "s3" {
+    bucket         = "anele-tfstate-1790671835"
     key            = "spotify-pipeline/terraform.tfstate"        # The key (path) within the S3 bucket where the state file will be stored.
     region         = "us-east-1"          # The AWS region where the S3 bucket is located, specified by the variable aws_region.
     encrypt        = true                     # Enable server-side encryption for the state file in S3.

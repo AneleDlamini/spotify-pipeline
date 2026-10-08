@@ -224,6 +224,20 @@ aws logs tail /aws/lambda/spotify-pipeline-transform --since 12h
 An EventBridge rule with no target fires on schedule and silently does nothing — no error, no log entry. The only symptom is the absence of output.
 
 ---
+ 
+## Debugging notes
+ 
+Three failure modes worth recording, because each produced silence rather than an error.
+ 
+**1. A schedule that fired into nothing.** Running something on a schedule needs three resources: the rule, a target saying what to invoke, and a permission allowing EventBridge to invoke it. With the target missing, the rule fired every 6 hours and did nothing — no error, nothing in CloudWatch, and the rule reporting as `ENABLED` throughout. The symptom was the absence of files on mornings when nobody had invoked the function by hand. Diagnosed by checking `list-targets-by-rule` and finding an empty list. Lesson: a clean `terraform apply` proves the resources exist, not that they are connected.
+ 
+**2. A backend block that silently fell back to local state.** After moving the Terraform files into `Infrastructure/`, `plan` offered to create all 25 resources from scratch. The cause was a missing `bucket` line in the `backend` block, lost while editing. Terraform does not error on an incomplete backend — it quietly uses local state, finds none in a new folder, and concludes nothing exists. Applying would have tried to recreate live infrastructure. What slowed the diagnosis was checking `.terraform/terraform.tfstate`, which showed the correct bucket: that file caches the *previous* successful init rather than reflecting current config. Recovery was `terraform init -reconfigure`; `-migrate-state` would have copied the empty local state over the real state in S3.
+ 
+**3. An IAM denial that was not a permissions problem.** The Lambda failed with `AccessDenied` on `ssm:GetParameter` for `/spotify-pipeline/spotify/spotify/client_id`. The path contains `spotify` twice: the environment variable already ended in `/spotify` and the code appended it again. The role correctly grants access to three specific parameter ARNs, and the malformed path was not among them. A denial naming a specific resource is often a sign the resource name is wrong rather than the policy.
+ 
+**General pattern.** All three were absences rather than errors — a missing target, a missing config line, a malformed path. Error messages point at themselves; silence has to be looked for. Anything meant to happen unattended needs a check for whether it happened, separate from whether it deployed.
+ 
+---
 
 ## Tearing it down
 

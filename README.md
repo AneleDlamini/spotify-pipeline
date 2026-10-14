@@ -12,34 +12,13 @@ Built as a learning project for infrastructure as code, serverless architecture,
 
 <img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/90683578-60a4-4964-b695-34d0777fafb8" />
 
-
 Both Lambdas run from the same container image in ECR, with `image_config.command` selecting which handler runs. Each has its own IAM role scoped to only what it needs.
 
 ---
 
 ## Repository layout
 
-```
-.
-├── Infrastructure/                  # all Terraform — run commands from here
-│   ├── versions.tf         # Terraform and provider versions, S3 backend
-│   ├── variables.tf        # project name, region, image tag
-│   ├── s3.tf               # raw data bucket, Athena results bucket
-│   ├── ssm.tf              # encrypted Spotify credentials
-│   ├── iam.tf              # one role per Lambda
-│   ├── lambda.tf           # both functions, log groups, permissions
-│   ├── eventbridge.tf      # schedule rule and target
-│   ├── athena.tf           # Athena workgroup, Glue database and table
-│   └── outputs.tf
-├── Ingest/
-│   ├── Dockerfile          # AWS Lambda Python base image
-│   ├── handler.py          # ingest: Spotify API → raw JSON in S3
-│   ├── transform.py        # transform: raw JSON → Parquet
-│   └── requirements.txt
-├── Athena/
-│   └── queries/            # analytical queries
-└── README.md
-```
+<img width="1525" height="919" alt="image" src="https://github.com/user-attachments/assets/8524ac01-805a-43e0-86c7-bc83ae4f5ff3" />
 
 ---
 

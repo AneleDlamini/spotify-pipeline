@@ -10,27 +10,8 @@ Built as a learning project for infrastructure as code, serverless architecture,
 
 ## Architecture
 
-```
-EventBridge (every 6 hours)
-        │
-        ▼
-  Ingest Lambda ──────▶ Spotify API
-        │                  ▲
-        │                  │ credentials
-        │             SSM Parameter Store
-        ▼
-   S3: recently_played/dt=YYYY-MM-DD/*.json
-        │
-        │ (S3 ObjectCreated event)
-        ▼
- Transform Lambda
-        │
-        ▼
-   S3: processed/recently_played/dt=YYYY-MM-DD/*.parquet
-        │
-        ▼
-   Athena (Glue catalog table, partition projection)
-```
+<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/90683578-60a4-4964-b695-34d0777fafb8" />
+
 
 Both Lambdas run from the same container image in ECR, with `image_config.command` selecting which handler runs. Each has its own IAM role scoped to only what it needs.
 

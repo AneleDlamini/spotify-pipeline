@@ -18,7 +18,7 @@ Both Lambdas run from the same container image in ECR, with `image_config.comman
 
 ## Repository layout
 
-<img width="1525" height="919" alt="image" src="https://github.com/user-attachments/assets/8524ac01-805a-43e0-86c7-bc83ae4f5ff3" />
+<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/d71e7f63-8b01-44bd-aad3-556c66e772c1" />
 
 ---
 
